@@ -1,14 +1,73 @@
-const router = require('express').Router();
+const express = require('express')
+const bcrypt = require('bcryptjs')
+const data = require('./userModel.js')
+const restricted = require('../auth/authRestricted.js')
+const jwt = require('jsonwebtoken')
+const router = express.Router()
 
-const Users = require('./users-model.js');
-const restricted = require('../auth/restricted-middleware.js');
+router.get('/', (req, res) => {
+    res.send("testing Port!");
+  });
 
-router.get('/', restricted, (req, res) => {
-  Users.find()
-    .then(users => {
-      res.json(users);
+router.post('/register', (req, res) => {
+    const {username , password} = req.body
+
+    const hash = bcrypt.hashSync(password, 10)
+
+    data.add({username, password: hash})
+    .then(save => {
+        res.status(201).json(save)
     })
-    .catch(err => res.send(err));
-});
+    .catch(err => {
+        res.status(500).send(err)
+    })
+
+})
+
+router.post('/login', (req, res) => {
+    const {username, password} = req.body
+
+    data.findby({username})
+    .first()
+    .then(user => {
+        if(user && bcrypt.compareSync(password, user.password)){
+            req.session.user = user
+            const token = createToken(user)
+            res.status(200).json(user.id, token)
+        }else {
+            res.status(401).json({meaasage: 'invalid credentials'})
+        }
+    })
+    .catch(err => {
+        res.send(err)
+        //res.status(500).json(err)
+    })
+
+})
+function createToken(user) {
+  const payload = {
+    usename: user.usename, 
+    subject: user.id
+  }
+  const options = {
+    expiresIn: '1h'
+  }
+
+  const secret = 'is is secret is it safe'
+
+  return jwt.sign(payload, secret, options)
+}
+
+router.get('/users',restricted, (req, res) => {
+
+    data.find()
+    .then(users => {
+        res.status(200).json(users)
+    })
+    .catch(err => {
+        res.status(500).send(err)
+    })
+
+})
 
 module.exports = router;
